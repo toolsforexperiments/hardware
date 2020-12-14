@@ -154,12 +154,8 @@ class Agilent_ENA_5071C(VisaInstrument):
                                              'SWR', 'REAL', 'IMAG', 
                                              'UPH', 'PPH')
                             )
-                            # '''
-                            # Set trace format. MLOGarithmic|PHASe|GDELay| SLINear|
-                            # SLOGarithmic|SCOMplex|SMITh|SADMittance|PLINear|PLOGarithmic|
-                            # POLar|MLINear|SWR|REAL| IMAGinary|UPHase|PPHase
-                            # '''
-                            
+                        
+
         self.add_parameter('math', 
                            get_cmd = ':CALC1:MATH:FUNC?', 
                            set_cmd = ':CALC1:MATH:FUNC {}', 
@@ -182,9 +178,9 @@ class Agilent_ENA_5071C(VisaInstrument):
         self.add_parameter('trace', 
                            set_cmd = None, 
                            get_cmd = self.gettrace)
-        self.add_parameter('fdata', 
+        self.add_parameter('SweepData', 
                            set_cmd = None, 
-                           get_cmd = self.getfdata)
+                           get_cmd = self.getSweepData)
         self.add_parameter('pdata', 
                            set_cmd = None, 
                            get_cmd = self.getpdata)
@@ -195,11 +191,6 @@ class Agilent_ENA_5071C(VisaInstrument):
                            unit = 's'
                            )
         self.connect_message()
-        
-        
-####################### Custom Functions 
-    def average_restart(self):
-        self.write('SENS1:AVER:CLE')  
     def gettrace(self):
         '''
         Gets amp/phase stimulus data, returns 2 arrays
@@ -213,152 +204,23 @@ class Agilent_ENA_5071C(VisaInstrument):
         data= np.array(list(map(float,strdata.split(','))))
         data=data.reshape((int(np.size(data)/2)),2)
         return data.transpose()
-        
-    def getfdata(self):
+    
+    def getSweepData(self):
         '''
-        Gets freq stimulus data, returns array
+        Gets stimulus data in displayed range of active measurement, returns array
+        Will return different data depending on sweep type. 
         
+        For example: 
+            power sweep: 1xN array of powers in dBm
+            frequency sweep: 1xN array of freqs in Hz
         Input:
             None
         Output:
-            freqvalues array (Hz)
+            sweep_values (Hz, dBm, etc...)
         '''
-        logging.info(__name__ + ' : get f stim data')
-        strdata= str(self.ask(':SENS1:FREQ:DATA?'))
+        logging.info(__name__ + ' : get stim data')
+        strdata= str(self.ask(':SENS1:X:VAL?'))
         return np.array(list(map(float,strdata.split(','))))
-    def getpdata(self):
-        '''
-        Get the probe power sweep range
-        
-        Input: 
-            None
-        Output:
-            probe power range (numpy array)
-        '''
-        logging.debug(__name__ + ' : get the probe power sweep range')
-        return np.linspace(self.power_start(), self.power_stop(), 1601)
-        
-    def set_bundle(self, bundle):
-        '''
-        This lets you set values for the VNA all at once in a dictionary by using a key
-        '''
-        for key in bundle:
-            try: 
-                if type(bundle[key]) == str: 
-                    eval("self."+key+"(str('"+bundle[key]+"'))") 
-                else:
-                    eval("self."+key+"(str("+str(bundle[key])+"))") 
-            except AttributeError:
-                raise Exception("Key '" + str(key)+"' not a valid VNA setting, check your dictionary for typos compared to VNA settings in driver using VNA.get_all()")
 
-        
-    def get_bundle(self,bundle):
-        ''' 
-        This retrieves the current elements in the bundle dictionary, but JUST the keys that you give it. It also calls BS if you give it a garbage key.
-        '''
-        for key in bundle:
-            try: 
-                if type(bundle[key]) == str: 
-                    bundle[key] = eval("self."+key+"(str('"+bundle[key]+"'))") 
-                else:
-                    bundle[key] = eval("self."+key+"(str("+str(bundle[key])+"))") 
-            except AttributeError:
-                raise Exception("Key '" + str(key)+"' not a valid VNA setting, check your dictionary for typos compared to VNA settings in driver using VNA.get_all()")
-                
-        return bundle.copy() #the copy is because you want them to be seperate from the original dictionary. If it were C they would have different pointers
-      
-    def data_to_mem(self):        
-        '''
-        Calls for data to be stored in memory
-        '''
-        logging.debug(__name__+": data to mem called")
-        self.write(":CALC1:MATH:MEM")
-    def average(self, number): 
-        #setting averaging timeout, it takes 52.02s for 100 traces to average with 1601 points and 2kHz IFBW, so 
-        '''
-        Sets the number of averages taken, waits until the averaging is done, then gets the trace
-        '''
-        assert number > 0
-        
-        prev_trform = self.trform()
-        self.trform('PLOG')
-        self.trigger_source('BUS')
-        
-        buffer_time = 0.5
-        if number == 1:
-           
-            self.averaging(0)
-            self.average_trigger(0)
-            s_per_trace = self.sweep_time()
-            self.timeout(number*s_per_trace+buffer_time)
-            self.trigger()
-            return self.gettrace()
-        else: 
-            #wait just a little longer for safety #TODO: find a way to make this better than 8%
-            #turn on the average trigger
             
-            self.averaging(1)
-            self.average_trigger(1)
-            self.avgnum(number)
-            prev_timeout = self.timeout()
-            s_per_trace = self.sweep_time()
-            self.timeout(number*s_per_trace+buffer_time)
-            print("Waiting {:.3f} seconds for {} averages...".format(self.timeout(), number))
-            self.write(':TRIG:SING')
-            # print('triggered')
-            #the next command will hang the kernel until the averaging is done
-            print(self.ask('*OPC?'))
-            # print('timeout check')
-            return self.gettrace()
-    
-    def savetrace(self, avgnum = 500, savedir = None): 
-        if savedir == None:
-            import easygui 
-            savedir = easygui.filesavebox("Choose file to save trace information: ")
-            assert savedir != None
-            
-        elif savedir == "previous": 
-            savedir = self.previous_save
-            assert savedir != None
-        fdata = self.getfdata()
-        prev_trform = self.trform()
-        self.trform('PLOG')
-        tracedata = self.average(avgnum)
-        self.trform(prev_trform)
-        self.trigger_source('INT')
-        self.previous_save = savedir
-        import h5py
-        file = h5py.File(savedir, 'w')
-        file.create_dataset("VNA Frequency (Hz)", data = fdata)
-        file.create_dataset("S21", data = tracedata)
-        file.create_dataset("Phase (deg)", data = tracedata[1])
-        file.create_dataset("Power (dB)", data = tracedata[0])
-        file.close()
         
-        
-    def save_important_info(self, savedir = None):
-        if savedir == None:
-            import easygui 
-            savedir = easygui.filesavebox("Choose where to save VNA info: ", default = savedir)
-            assert savedir != None
-        file = open(savedir+'.txt', 'w')
-        file.write(self.name+'\n')
-        file.write("Power: "+str(self.power())+'\n')
-        file.write("Frequency: "+str(self.fcenter())+'\n')
-        file.write("Span: "+str(self.fspan())+'\n')
-        file.write("EDel: "+str(self.electrical_delay())+'\n')
-        file.write("Num_Pts: "+str(self.num_points())+'\n')
-        print("Power: "+str(self.power())+'\n'+"Frequency: "+str(self.fcenter())+'\n'+"Span: "+str(self.fspan())+'\n'+"EDel: "+str(self.electrical_delay())+'\n'+"Num_Pts: "+str(self.num_points())+'\n')
-        file.close()
-        return savedir
-    
-    def trigger(self): 
-        self.write(':TRIG:SING')
-        return None
-    def set_to_manual(self): 
-        self.rfout(1)
-        self.averaging(1)
-        self.avgnum(1)
-        self.average_trigger(0)
-        self.trform('PHAS')
-        self.trigger_source('INT')
