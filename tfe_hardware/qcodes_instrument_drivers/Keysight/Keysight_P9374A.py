@@ -13,6 +13,26 @@ import numpy as np
 from qcodes import (VisaInstrument, Parameter, ParameterWithSetpoints, InstrumentChannel, validators as vals)
 from qcodes.instrument.parameter import ParamRawDataType
 
+class SParameterData(Parameter):
+
+    def __init__(self, trace_number: int, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.trace_number = trace_number
+
+    def get_raw(self) -> ParamRawDataType:
+        _, traces, _ = self.root_instrument.get_existing_traces()
+        if self.instrument.npts() == 0 or self.trace_number not in traces:
+            return 'Trace is not on'
+
+        data = self.root_instrument.ask(f":CALC1:MEAS{self.trace_number}:PAR?").strip('"')
+        return data
+
+    def set_raw(self, S_parameter: str = 'S21') -> None:
+        _, traces, _ = self.root_instrument.get_existing_traces()
+        if self.instrument.npts() == 0 or self.trace_number not in traces:
+            return 'Trace is not on'
+
+        self.root_instrument.write( f":CALC1:MEAS{self.trace_number}:PAR {S_parameter}")
 
 class FrequencyData(Parameter):
 
@@ -86,6 +106,15 @@ class Trace(InstrumentChannel):
             trace_number=self._number,
             vals=vals.Arrays(shape=(self.npts.get_latest,),
                              valid_types=(np.floating, np.complexfloating))
+        )
+
+        self.add_parameter(
+            name='s_parameter',
+            unit='',
+            parameter_class=SParameterData,
+            trace_number=self._number,
+            vals=vals.Enum('S11', 'S12', 'S21', 'S22'),
+            get_parser=str
         )
 
     def _get_npts(self):
@@ -229,8 +258,9 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
         self.add_parameter('trigger_source',
                            get_cmd='TRIG:SOUR?',
                            set_cmd='TRIG:SOUR {}',
-                           vals=vals.Enum('INT', 'EXT', 'MAN', 'BUS')
+                           vals=vals.Enum('IMM', 'EXT', 'MAN')
                            )
+
         self.add_parameter('trform',
                            get_cmd=':CALC1:FORM?',
                            set_cmd=':CALC1:FORM {}',
@@ -266,6 +296,9 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
                            get_parser=float,
                            unit='s'
                            )
+
+
+
 
         for i in range(1, 17):
             trace = Trace(self, number=i, name=f"trace_{i}")
@@ -334,3 +367,17 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
         """
         logging.debug(__name__ + ": data to mem called")
         self.write(":CALC1:MATH:MEM")
+
+    def remove_trace(self, number: int):
+        """
+        Remove selected trace
+        """
+        self.write(f"CALC:MEAS{number}:DEL")
+
+    def add_trace(self, number: int = 1, s_parameter: str = "S21"):
+        """
+        Adds a trace with a specific s_parameter
+        """
+        self.write(f"CALC:MEAS{number}:DEF '{s_parameter}'")
+        self.write(f"DISP:MEAS{number}:FEED 1")
+
