@@ -13,7 +13,44 @@ import numpy as np
 from qcodes import (VisaInstrument, Parameter, ParameterWithSetpoints, InstrumentChannel, validators as vals)
 from qcodes.instrument.parameter import ParamRawDataType
 
+"""
+Some basic concepts for this VNA:
+
+Measurement: 
+    The VNA object that actually holds the information of measurement of the device. It will not automatically 
+    show up on the VNA software interface when created.  
+Trace: 
+    The VNA object that can be shown on the VNA software, needs to link to a certain measurement.  
+    As a working definition in our setting, we can think the trace and measurement are equivalent as there are always 
+    created together.     
+Channel:
+    One channel can hold many traces. So that the common settings (frequency range, number of points, etc...) 
+    can be applied to all the measurement. In this driver we are only use one channel. More needs to do if we want to
+    support multiple channel functions. 
+Window:
+    Place to show the selected traces on the VNA software. 
+    
+The settings that are independent to each trace/measurement (S-parameters, trace data) will be method/parameters for 
+Trace object while common settings for the whole channel will be method/parameters for the Keysight_P9374A_SingleChannel
+object. 
+
+For example:
+    vna.trace_1.s_parameter()
+    get the S-parameter for the first trace/measurement. 
+    
+    vna.fstart()
+    get the start frequency for the whole channel. 
+
+"""
+
+
 class SParameterData(Parameter):
+    """
+    SParameterData(Parameter)
+
+    Qcodes parameter that can be used to set/get the S-parameter of this measurement.
+
+    """
 
     def __init__(self, trace_number: int, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -32,9 +69,15 @@ class SParameterData(Parameter):
         if self.instrument.npts() == 0 or self.trace_number not in traces:
             return 'Trace is not on'
 
-        self.root_instrument.write( f":CALC1:MEAS{self.trace_number}:PAR {S_parameter}")
+        self.root_instrument.write(f":CALC1:MEAS{self.trace_number}:PAR {S_parameter}")
+
 
 class FrequencyData(Parameter):
+    """
+    FrequencyData(Parameter)
+
+    Qcodes parameter that can be used to get the frequency data of this measurment.
+    """
 
     def __init__(self, trace_number: int, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -50,6 +93,15 @@ class FrequencyData(Parameter):
 
 
 class TraceData(ParameterWithSetpoints):
+    """
+    TraceData(ParameterWithSetpoints)
+
+    Qcodes ParameterWithSetpoints that can be used to get the data of this measurement.
+    VNA will be set to polar format "POL" to acquire data by default.
+    If the VNA is in a different measurement format, it will be reset to that format after measurement, other wise VNA
+    will remain in format of self.data_fmt after the measurement.
+
+    """
 
     def __init__(self, trace_number: int, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -61,23 +113,43 @@ class TraceData(ParameterWithSetpoints):
         if self.instrument.npts() == 0 or self.trace_number not in traces:
             return np.array([])
 
+        # get the values of relevant parameters before taking the trace
         prev_fmt = None
         if self.data_fmt is not None:
             prev_fmt = self.root_instrument.ask(f"CALC:MEAS{self.trace_number}:FORM?")
             self.root_instrument.write(f"CALC:MEAS{self.trace_number}:FORM {self.data_fmt}")
-        data = self.root_instrument.ask(f"CALC:MEAS{self.trace_number}:DATA:FDATA?")
-        if prev_fmt is not None:
-            self.root_instrument.write(f"CALC:MEAS{self.trace_number}:FORM {prev_fmt}")
 
-        # process complex data correctly
-        data = np.array(data.split(',')).astype(float)
-        if self.data_fmt in ['POL'] and data.size % 2 == 0:
-            data = data.reshape((int(data.size/2), 2))
-            data = data[:, 0] + 1j*data[:, 1]
-        return data
+        # Code will check if VNA average trpe is SWEEP.
+        # If not a type error will be raised.
+        try:
+            prev_trigger_source, prev_trigger_mode, prev_averaging = self.root_instrument.average()
+            data = self.root_instrument.ask(f"CALC:MEAS{self.trace_number}:DATA:FDATA?")
+            # set relevant parameters back to their old values
+            self.root_instrument.trigger_source(prev_trigger_source)
+            self.root_instrument.trigger_mode(prev_trigger_mode)
+            self.root_instrument.averaging(prev_averaging)
+            if prev_fmt is not None:
+                self.root_instrument.write(f"CALC:MEAS{self.trace_number}:FORM {prev_fmt}")
+
+            # process complex data correctly
+            data = np.array(data.split(',')).astype(float)
+            if self.data_fmt in ['POL'] and data.size % 2 == 0:
+                data = data.reshape((int(data.size / 2), 2))
+                data = data[:, 0] + 1j * data[:, 1]
+            return data
+
+        except Exception as e:
+            print(f"Data taking failed. {type(e)}: {e.args}")
+            return np.zeros(self.instrument.npts())
 
 
 class Trace(InstrumentChannel):
+    """
+    A Qcode InstrumentChannel creates from the parameter instrument: Keysight_P9374A_SingleChannel.
+
+    This InstrumentChannel contains all the parameters and functions that are unique for each different
+    trace/measurement.
+    """
 
     def __init__(self, parent: "Keysight_P9374A_SingleChannel", number: int, name: str, **kwargs: Any):
         self._number = number
@@ -235,15 +307,21 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
         #                    vals=vals.Ints(0, 1)
         #                    )
 
-        self.add_parameter('avgnum',
-                           get_cmd=':SENS1:AVER:COUN?',
-                           set_cmd=':SENS1:AVER:COUN {}',
+        self.add_parameter('avg_num',
+                           get_cmd='SENS1:AVER:COUN?',
+                           set_cmd='SENS1:AVER:COUN {}',
                            vals=vals.Ints(1),
                            get_parser=int
                            )
+        self.add_parameter('avg_type',
+                           get_cmd='SENS1:AVER:MODE?',
+                           set_cmd='SENS1:AVER:MODE {}',
+                           vals=vals.Enum('POIN', 'SWEEP'),
+                           get_parser=str
+                           )
         self.add_parameter('phase_offset',
-                           get_cmd=':CALC1:CORR:OFFS:PHAS?',
-                           set_cmd=':CALC1:CORR:OFFS:PHAS {}',
+                           get_cmd='CALC1:CORR:OFFS:PHAS?',
+                           set_cmd='CALC1:CORR:OFFS:PHAS {}',
                            get_parser=float,
                            vals=vals.Numbers())
         self.add_parameter('electrical_delay',
@@ -253,14 +331,18 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
                            get_parser=float,
                            vals=vals.Numbers()
                            )
-
-        # TODO: Set trg sources
         self.add_parameter('trigger_source',
                            get_cmd='TRIG:SOUR?',
                            set_cmd='TRIG:SOUR {}',
                            vals=vals.Enum('IMM', 'EXT', 'MAN')
                            )
-
+        self.add_parameter('trigger_mode',
+                           get_cmd='SENS1:SWE:MODE?',
+                           set_cmd='SENS1:SWE:MODE {}',
+                           vals=vals.Enum('HOLD',
+                                          'CONT',
+                                          'GRO',
+                                          'SING'))
         self.add_parameter('trform',
                            get_cmd=':CALC1:FORM?',
                            set_cmd=':CALC1:FORM {}',
@@ -297,9 +379,6 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
                            unit='s'
                            )
 
-
-
-
         for i in range(1, 17):
             trace = Trace(self, number=i, name=f"trace_{i}")
             self.add_submodule(f"trace_{i}", trace)
@@ -334,7 +413,9 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
         return ret
 
     def get_existing_traces(self) -> Tuple[List[int], List[int], List[str]]:
-        """Return three lists, with one item per current trace: channel, trace/measurement number, parameter"""
+        """
+        Return three lists, with one item per current trace: channel, trace/measurement number, parameter
+        """
         chans, numbers, params = [], [], []
         trace_dict = self.get_existing_traces_by_channel()
         for chan, traces in trace_dict.items():
@@ -371,13 +452,68 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
     def remove_trace(self, number: int):
         """
         Remove selected trace
+
+        Note that when removing a new trace, vna will restart average.
         """
-        self.write(f"CALC:MEAS{number}:DEL")
+        _, traces, _ = self.get_existing_traces()
+        if number not in traces:
+            print('Trace does not exist. Nothing happens.')
+        else:
+            logging.debug(__name__ + f": remove trace{number}")
+            self.write(f"CALC1:MEAS{number}:DEL")
+            print('Trace is successfully removed.')
 
     def add_trace(self, number: int = 1, s_parameter: str = "S21"):
         """
         Adds a trace with a specific s_parameter
+
+        Note that when adding a new trace, vna will restart average.
         """
-        self.write(f"CALC:MEAS{number}:DEF '{s_parameter}'")
-        self.write(f"DISP:MEAS{number}:FEED 1")
+        _, traces, _ = self.get_existing_traces()
+        if number in traces:
+            print('Trace exist. Please use another trace number or remove the current one with remove_trace(number).')
+        else:
+            logging.debug(__name__ + f": add trace{number} with S-parameter {s_parameter}")
+            self.write(f"CALC1:MEAS{number}:DEF '{s_parameter}'")
+            self.write(f"DISP:MEAS{number}:FEED 1")  # always show this trace in the window 1 (FEED number).
+            print('Trace is successfully created.')
+
+    # TODO: add timout protection
+    def average(self) -> Tuple[str, str, int]:
+        """
+        Do the average self.avg_num() times.
+
+        Read the trigger settings (trigger source and mode) before doing the average and return them.
+        During the average the VNA will be in manual trigger source with single trigger mode.
+        A single trigger signal is generated with 'INIT:IMM' for self.avg_num() times to complete the whole average
+        process.
+
+        Note that after the average the VNA will remain in the trigger settings for the average process.
+        This is to give time for user to use another command to take the data from the trace/measurement.
+
+        The trace.data() will automatically take the old settings and put them back. But you can also just take the
+        return values of this function and reset by yourself.
+
+        Will check if VNA average type is in SWEEP. If not, a type error will be raised.
+        """
+
+        if self.avg_type() == 'POIN':
+            raise TypeError('VNA average type is set to POINT, neeed to be SWEEP. Use vna.avg_type() function to change')
+        else:
+            prev_trigger_source = self.trigger_source()
+            prev_trigger_mode = self.trigger_mode()
+            prev_averaging = self.averaging()
+            # The following trigger settings are necessary for VNA to take the average
+            self.trigger_source('MAN')
+            self.trigger_mode('SING')
+            self.averaging(1)
+            self.write("SENS:AVER:CLE")  # does not apply to point averaging
+            for i in range(self.avg_num()):
+                self.write('INIT:IMM')
+                averaged = 0
+                while averaged == 0:
+                    averaged = self.ask("*OPC?")
+            print('Average completed')
+
+        return prev_trigger_source, prev_trigger_mode, prev_averaging
 
