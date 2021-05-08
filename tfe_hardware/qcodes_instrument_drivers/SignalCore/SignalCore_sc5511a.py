@@ -9,11 +9,11 @@ A simple driver for SignalCore SC5511A to be used with QCoDes, transferred from 
 
 import ctypes
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from qcodes import Instrument
 from qcodes.utils.validators import Numbers
-from hatdrivers import DLL
+
 
 class Device_rf_params_t(ctypes.Structure):
     _fields_ = [("rf1_freq", ctypes.c_ulonglong),
@@ -78,6 +78,7 @@ class Device_status_t(ctypes.Structure):
                 ("operate_status_t", Operate_status_t),
                 ("pll_status_t", Pll_status_t)]
 
+
 class Device_info_t(ctypes.Structure):
     _fields_ = [("serial_number", ctypes.c_uint32),
                 ("hardware_revision", ctypes.c_float),
@@ -85,15 +86,21 @@ class Device_info_t(ctypes.Structure):
                 ("manufacture_date", ctypes.c_uint32)
                 ]
 
-# End of Structures------------------------------------------------------------                
+
+# End of Structures------------------------------------------------------------
 class SignalCore_SC5511A(Instrument):
-    def __init__(self, name: str, serial_number: str, dll = None, debug = False, **kwargs: Any):
+
+    dllpath = r"C:\Program Files\SignalCore\SC5511A\api\c\x64\sc5511a.dll"
+
+    def __init__(self, name: str, serial_number: str,
+                 dllpath: Optional[str] = None, debug=False, **kwargs: Any):
         super().__init__(name, **kwargs)
+
         logging.info(__name__ + f' : Initializing instrument SignalCore generator {serial_number}')
-        if dll is not None:
-            self._dll = dll
+        if dllpath is not None:
+            self._dll = ctypes.CDLL(dllpath)
         else:
-            self._dll = ctypes.CDLL(DLL.__path__._path[0] + '//sc5511a.dll')
+            self._dll = ctypes.CDLL(self.dllpath)
 
         if debug:
             print(self._dll)
@@ -119,7 +126,7 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         self._device_info = Device_info_t(0, 0, 0, 0)
         self.get_idn()
-        self.do_set_auto_level_disable(0) # setting this to 1 will lead to unstable output power
+        self.do_set_auto_level_disable(0)  # setting this to 1 will lead to unstable output power
 
         self.add_parameter('power',
                            label='power',
@@ -128,7 +135,7 @@ class SignalCore_SC5511A(Instrument):
                            set_cmd=self.do_set_power,
                            set_parser=float,
                            unit='dBm',
-                           vals=Numbers(min_value=-144,max_value=19))
+                           vals=Numbers(min_value=-144, max_value=19))
 
         self.add_parameter('output_status',
                            label='output_status',
@@ -136,7 +143,7 @@ class SignalCore_SC5511A(Instrument):
                            get_parser=int,
                            set_cmd=self.do_set_output_status,
                            set_parser=int,
-                           vals=Numbers(min_value=0,max_value=1))
+                           vals=Numbers(min_value=0, max_value=1))
 
         self.add_parameter('frequency',
                            label='frequency',
@@ -145,7 +152,7 @@ class SignalCore_SC5511A(Instrument):
                            set_cmd=self.do_set_frequency,
                            set_parser=float,
                            unit='Hz',
-                           vals=Numbers(min_value=0,max_value=20e9))
+                           vals=Numbers(min_value=0, max_value=20e9))
 
         self.add_parameter('reference_source',
                            label='reference_source',
@@ -153,7 +160,7 @@ class SignalCore_SC5511A(Instrument):
                            get_parser=int,
                            set_cmd=self.do_set_reference_source,
                            set_parser=int,
-                           vals=Numbers(min_value=0,max_value=1))
+                           vals=Numbers(min_value=0, max_value=1))
 
         self.add_parameter('auto_level_disable',
                            label='0 = power is leveled on frequency change',
@@ -161,7 +168,7 @@ class SignalCore_SC5511A(Instrument):
                            get_parser=int,
                            set_cmd=self.do_set_auto_level_disable,
                            set_parser=int,
-                           vals=Numbers(min_value=0,max_value=1))
+                           vals=Numbers(min_value=0, max_value=1))
 
         self.add_parameter('temperature',
                            label='temperature',
@@ -170,10 +177,32 @@ class SignalCore_SC5511A(Instrument):
                            unit="C",
                            vals=Numbers(min_value=0, max_value=200))
 
-
         if self._device_status.operate_status_t.ext_ref_lock_enable == 0:
             self.do_set_reference_source(1)
 
+    @classmethod
+    def connected_instruments(cls, max_n_gens: int = 100, sn_len: int = 100) -> List[str]:
+        """
+        Return the serial numbers of the connected generators.
+
+        The parameters are very unlikely to be needed, and are just for making sure
+        we allocated the right amount of memory when calling the SignalCore DLL.
+        Parameters:
+            max_n_gens: maximum number of generators expected
+            sn_len: max length of serial numbers.
+        """
+        dll = ctypes.CDLL(cls.dllpath)
+        search = dll.sc5511a_search_devices
+
+        # generate and allocate string memory
+        mem_type = (ctypes.c_char_p * max_n_gens)
+        mem = mem_type()
+        for i in range(max_n_gens):
+            mem[i] = b' ' * sn_len
+
+        search.argtypes = [mem_type]
+        n_gens_found = search(mem)
+        return [sn.decode('utf-8') for sn in mem[:n_gens_found]]
 
     def set_open(self, open):
         if open and not self._open:
@@ -183,11 +212,6 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
             self._open = False
         return True
-
-    def close(self):
-        self.set_open(0)
-
-        
 
     def do_set_output_status(self, enable):
         """
@@ -214,7 +238,7 @@ class SignalCore_SC5511A(Instrument):
         status = self._device_status.operate_status_t.rf1_out_enable
         self._dll.sc5511a_close_device(self._handle)
         return status
-                    
+
     def do_set_frequency(self, frequency):
         """
         Sets RF1 frequency. Valid between 100MHz and 20GHz
@@ -231,7 +255,7 @@ class SignalCore_SC5511A(Instrument):
         if close:
             self._dll.sc5511a_close_device(self._handle)
         return if_set
-        
+
     def do_get_frequency(self):
         logging.info(__name__ + ' : Getting frequency')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
@@ -239,7 +263,7 @@ class SignalCore_SC5511A(Instrument):
         frequency = self._rf_params.rf1_freq
         self._dll.sc5511a_close_device(self._handle)
         return frequency
-    
+
     def do_set_reference_source(self, lock_to_external):
         logging.info(__name__ + ' : Setting reference source to %s' % lock_to_external)
         high = ctypes.c_ubyte(0)
@@ -248,14 +272,13 @@ class SignalCore_SC5511A(Instrument):
         source = self._dll.sc5511a_set_clock_reference(self._handle, high, lock)
         self._dll.sc5511a_close_device(self._handle)
         return source
-    
+
     def do_get_reference_source(self):
         logging.info(__name__ + ' : Getting reference source')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
-        enabled =  self._device_status.operate_status_t.ext_ref_lock_enable
+        enabled = self._device_status.operate_status_t.ext_ref_lock_enable
         self._dll.sc5511a_close_device(self._handle)
         return enabled
-
 
     def do_set_power(self, power):
         logging.info(__name__ + ' : Setting power to %s' % power)
@@ -268,7 +291,7 @@ class SignalCore_SC5511A(Instrument):
         if close:
             self._dll.sc5511a_close_device(self._handle)
         return completed
-    
+
     def do_get_power(self):
         logging.info(__name__ + ' : Getting Power')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
@@ -315,12 +338,14 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_get_device_info(self._handle, ctypes.byref(self._device_info))
         device_info = self._device_info
         self._dll.sc5511a_close_device(self._handle)
-        def date_decode(date_int:int):
+
+        def date_decode(date_int: int):
             date_str = f"{date_int:032b}"
-            yr = f"20{int(date_str[:8],2)}"
-            month = f"{int(date_str[16:24],2)}"
-            day = f"{int(date_str[8:16],2)}"
+            yr = f"20{int(date_str[:8], 2)}"
+            month = f"{int(date_str[16:24], 2)}"
+            day = f"{int(date_str[8:16], 2)}"
             return f"{month}/{day}/{yr}"
+
         IDN: Dict[str, Optional[str]] = {
             'vendor': "SignalCore",
             'model': "SC5511A",
@@ -328,9 +353,5 @@ class SignalCore_SC5511A(Instrument):
             'firmware_revision': device_info.firmware_revision,
             'hardware_revision': device_info.hardware_revision,
             'manufacture_date': date_decode(device_info.manufacture_date)
-            }
+        }
         return IDN
-
-if __name__ == "__main__":
-    SC1 = SignalCore_SC5511A("SC1", "100024E0")
-
