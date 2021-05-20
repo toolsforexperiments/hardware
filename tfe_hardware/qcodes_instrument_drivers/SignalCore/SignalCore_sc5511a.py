@@ -325,7 +325,7 @@ class SignalCore_SC5511A(Instrument):
         n_gens_found = search(mem)
         return [sn.decode('utf-8') for sn in mem[:n_gens_found]]
 
-    def set_open(self, open):
+    def set_open(self, open) -> bool:
         if open and not self._open:
             self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
             self._open = True
@@ -334,7 +334,18 @@ class SignalCore_SC5511A(Instrument):
             self._open = False
         return True
 
-    def do_set_output_status(self, enable):
+    def soft_trigger(self) -> None:
+        """
+        Send out a soft trigger, so that the we can start the sweep
+        Generator need to be configured for list mode and soft trigger is selected as the trigger source
+        """
+        logging.info(__name__ + ' : Send a soft trigger to the generator')
+        self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
+        self._dll.sc5511a_list_soft_trigger(self._handle)
+        self._dll.sc5511a_close_device(self._handle)
+        return None
+
+    def do_set_output_status(self, enable) -> None:
         """
         Turns the output of RF1 on or off.
             Input:
@@ -347,7 +358,7 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return completed
 
-    def do_get_output_status(self):
+    def do_get_output_status(self) -> int:
         """
         Reads the output status of RF1
             Output:
@@ -360,9 +371,9 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return status
 
-    def do_set_sweep_start_frequency(self, sweep_start_frequency):
+    def do_set_sweep_start_frequency(self, sweep_start_frequency) -> None:
         """
-        Set the sweep start frequency of RF1
+        Set the sweep start frequency of RF1 in the unit of Hz
         """
         c_sweep_start_freq = ctypes.c_ulonglong(int(sweep_start_frequency))
         logging.info(__name__ + ' : Setting sweep start frequency to %s' % sweep_start_frequency)
@@ -375,7 +386,11 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_sweep_start_frequency(self):
+    def do_get_sweep_start_frequency(self) -> float:
+        """
+        Get the sweep start frequency that is used in the sweep mode
+        The frequency returned is in the unit of Hz
+        """
         logging.info(__name__ + 'Getting sweep start frequency')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -383,9 +398,9 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return sweep_start_frequency
 
-    def do_set_sweep_stop_frequency(self, sweep_stop_frequency):
+    def do_set_sweep_stop_frequency(self, sweep_stop_frequency) -> None:
         """
-        Set the sweep stop frequency of RF1
+        Set the sweep stop frequency of RF1 in the unit of Hz
         """
         c_sweep_stop_frequency = ctypes.c_ulonglong(int(sweep_stop_frequency))
         logging.info(__name__ + ' : Setting sweep stop frequency to %s' % sweep_stop_frequency)
@@ -398,7 +413,11 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_sweep_stop_frequency(self):
+    def do_get_sweep_stop_frequency(self) -> float:
+        """
+        Get the sweep stop frequency that is used in the sweep mode
+        The frequency returned is in the unit of Hz
+        """
         logging.info(__name__ + 'Getting sweep stop frequency')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -406,9 +425,9 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return sweep_stop_frequency
 
-    def do_set_sweep_step_frequency(self, sweep_step_frequency):
+    def do_set_sweep_step_frequency(self, sweep_step_frequency) -> None:
         """
-        Set the sweep step frequency of RF1
+        Set the sweep step frequency of RF1 in the unit of Hz
         """
         c_sweep_step_frequency = ctypes.c_ulonglong(int(sweep_step_frequency))
         logging.info(__name__ + ' : Setting sweep step frequency to %s' % sweep_step_frequency)
@@ -421,7 +440,11 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_sweep_step_frequency(self):
+    def do_get_sweep_step_frequency(self) -> float:
+        """
+        Get the sweep step frequency that is used in the sweep mode
+        The frequency returned is in the unit of Hz
+        """
         logging.info(__name__ + 'Getting sweep step frequency')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -429,7 +452,7 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return sweep_step_frequency
 
-    def do_set_sweep_dwell_time(self, sweep_dwell_time):
+    def do_set_sweep_dwell_time(self, sweep_dwell_time) -> None:
         """
         Set the sweep/list time at each frequency point.
         Note that the dwell time is set as multiple of 500 us.
@@ -446,7 +469,11 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_sweep_dwell_time(self):
+    def do_get_sweep_dwell_time(self) -> int:
+        """
+        Get the dwell time of the sweep mode.
+        Return value is the unit multiple of 500 us, e.g. a return value 3 means the dwell time is 1500 us.
+        """
         logging.info(__name__ + 'Getting sweep dwell time in the unit of how many multiple of 500 us')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -454,7 +481,7 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return sweep_dwell_time
 
-    def do_set_sweep_cycles(self, sweep_cycles):
+    def do_set_sweep_cycles(self, sweep_cycles) -> None:
         """
         Set the number of sweep cycles to perform before stopping.
         To repeat the sweep continuously, set the value to 0.
@@ -470,7 +497,11 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_sweep_cycles(self):
+    def do_get_sweep_cycles(self) -> int:
+        """
+        Get the number of sweep cycles to perform before stopping.
+        To repeat the sweep continuously, the value is 0.
+        """
         logging.info(__name__ + 'Getting number of sweep cycles')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -478,10 +509,11 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return sweep_cycles
 
-    def do_set_trig_out_enable(self, trig_out_enable):
+    def do_set_trig_out_enable(self, trig_out_enable) -> None:
         """
         Set the trigger output status.
-        0 = No trigger ouput
+        It does not send out the trigger, just enable the generator to send out the trigger
+        0 = No trigger output
         1 = Puts a trigger pulse on the TRIGOUT pin
         """
         c_trig_out_enable = ctypes.c_ubyte(int(trig_out_enable))
@@ -499,7 +531,12 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_trig_out_enable(self):
+    def do_get_trig_out_enable(self) -> int:
+        """
+        Get the status of the trigger output status
+        0 = No trigger output
+        1 = Puts a trigger pulse on the TRIGOUT pin
+        """
         logging.info(__name__ + 'Getting trigger output status')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -507,7 +544,7 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return trig_out_enable
 
-    def do_set_trig_out_on_cycle(self, trig_out_on_cycle):
+    def do_set_trig_out_on_cycle(self, trig_out_on_cycle) -> None:
         """
         Set the trigger output mode
         0 = Puts out a trigger pulse at each frequency change
@@ -528,7 +565,12 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_trig_out_on_cycle(self):
+    def do_get_trig_out_on_cycle(self) -> int:
+        """
+        Get the trigger output mode
+        0 = Puts out a trigger pulse at each frequency change
+        1 = Puts out a trigger pulse at the completion of each sweep/list cycle
+        """
         logging.info(__name__ + 'Getting trigger output mode ')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -562,6 +604,11 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_step_on_hw_trig(self) -> int:
+        """
+        Set the behavior of the sweep/list mode when receiving a trigger.
+        0 = Start/Stop behavior
+        1 = Step-on-trigger
+        """
         logging.info(__name__ + 'Getting status of step on trigger mode ')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -592,6 +639,12 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_return_to_start(self) -> int:
+        """
+        Get the status of how the frequency will change at the end of the list/sweep
+        0 = Stop at end of sweep/list. The frequency will stop at the last point of the sweep/list
+        1 = Return to start. The frequency will return and stop at the beginning point of the sweep or list after a
+            cycle.
+        """
         logging.info(__name__ + 'Getting status of return to start ')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -623,6 +676,13 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_hw_trig(self) -> int:
+        """
+        Get the status of hardware trigger
+        0 = Software trigger. Softtrigger can only be used to start and stop a sweep/list cycle. It does not work for
+            step-on-trigger mode.
+        1 = Hardware trigger. A high-to-low transition on the TRIGIN pin will trigger the device. It can be used for
+            both start/stop or step-on-trigger functions.
+        """
         logging.info(__name__ + 'Getting status of hardware trigger ')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -653,6 +713,12 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_tri_waveform(self) -> int:
+        """
+        Get the triangular waveform of the generator
+        0 = Sawtooth waveform. Frequency returns to the beginning frequency upon reaching the end of a sweep cycle
+        1 = Triangular waveform. Frequency reverses direction at the end of the list and steps back towards the
+            beginning to complete a cycle
+        """
         logging.info(__name__ + 'Getting status of triangular waveform ')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -683,6 +749,12 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_sweep_dir(self) -> int:
+        """
+        Get the sweep direction of the generator
+        0 = Forward. Sweeps start from the lowest start frequency or starts at the beginning of the list buffer
+        1 = Reverse. Sweeps start from the stop frequency and steps down toward the start frequency or starts at the
+            end and steps toward the beginning of the buffer
+        """
         logging.info(__name__ + 'Getting status of sweep direction ')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -712,6 +784,11 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_sss_mode(self) -> int:
+        """
+        Get the list/sweep mode of the generator
+        0 = List mode. Device gets its frequency points from the list buffer uploaded via LIST_BUFFER_WRITE register
+        1 = Sweep mode. The device computes the frequency points using the Start, Stop and Step frequencies
+        """
         logging.info(__name__ + 'Getting status of sss mode')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -737,6 +814,11 @@ class SignalCore_SC5511A(Instrument):
         return if_set
 
     def do_get_rf1_mode(self) -> int:
+        """
+        Get the RF mode for rf1
+        0 = single fixed tone mode
+        1 = sweep/list mode
+        """
         logging.info(__name__ + 'Getting the RF mode for rf1')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -744,9 +826,9 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return rf1_mode
 
-    def do_set_frequency(self, frequency):
+    def do_set_frequency(self, frequency) -> None:
         """
-        Sets RF1 frequency. Valid between 100MHz and 20GHz
+        Sets RF1 frequency in the unit of Hz. Valid between 100MHz and 20GHz
             Args:
                 frequency (int) = frequency in Hz
         """
@@ -761,7 +843,10 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return if_set
 
-    def do_get_frequency(self):
+    def do_get_frequency(self) -> float:
+        """
+        Gets RF1 frequency in the unit of Hz.
+        """
         logging.info(__name__ + ' : Getting frequency')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -769,7 +854,14 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return frequency
 
-    def do_set_reference_source(self, lock_to_external):
+    def do_set_reference_source(self, lock_to_external) -> None:
+        """
+        Set the generator reference source
+        0 = internal source
+        1 = external source
+
+        Note here high is set to 0, means we always use 10 MHz clock when use external lock
+        """
         logging.info(__name__ + ' : Setting reference source to %s' % lock_to_external)
         high = ctypes.c_ubyte(0)
         lock = ctypes.c_ubyte(lock_to_external)
@@ -778,14 +870,22 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return source
 
-    def do_get_reference_source(self):
+    def do_get_reference_source(self) -> int:
+        """
+        Get the generator reference source
+        0 = internal source
+        1 = external source
+        """
         logging.info(__name__ + ' : Getting reference source')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         enabled = self._device_status.operate_status_t.ext_ref_lock_enable
         self._dll.sc5511a_close_device(self._handle)
         return enabled
 
-    def do_set_power(self, power):
+    def do_set_power(self, power) -> None:
+        """
+        Set the power of the generator in the unit of dBm
+        """
         logging.info(__name__ + ' : Setting power to %s' % power)
         c_power = ctypes.c_float(power)
         close = False
@@ -797,7 +897,10 @@ class SignalCore_SC5511A(Instrument):
             self._dll.sc5511a_close_device(self._handle)
         return completed
 
-    def do_get_power(self):
+    def do_get_power(self) -> float:
+        """
+        Get the power of the generator in the unit of dBm
+        """
         logging.info(__name__ + ' : Getting Power')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_rf_parameters(self._handle, ctypes.byref(self._rf_params))
@@ -805,7 +908,10 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return rf_level
 
-    def do_set_auto_level_disable(self, enable):
+    def do_set_auto_level_disable(self, enable) -> None:
+        """
+        Set if we want to disable the auto level
+        """
         logging.info(__name__ + ' : Settingalc auto to %s' % enable)
         if enable == 1:
             enable = 0
@@ -817,7 +923,10 @@ class SignalCore_SC5511A(Instrument):
         self._dll.sc5511a_close_device(self._handle)
         return completed
 
-    def do_get_auto_level_disable(self):
+    def do_get_auto_level_disable(self) -> int:
+        """
+        Get if we disable to auto level
+        """
         logging.info(__name__ + ' : Getting alc auto status')
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_status(self._handle, ctypes.byref(self._device_status))
@@ -829,7 +938,10 @@ class SignalCore_SC5511A(Instrument):
             enabled = 1
         return enabled
 
-    def do_get_device_temp(self):
+    def do_get_device_temp(self)  -> float:
+        """
+        Get the device temperature in unit of C
+        """
         logging.info(__name__ + " : Getting device temperature")
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_temperature(self._handle, ctypes.byref(self._temperature))
@@ -838,6 +950,9 @@ class SignalCore_SC5511A(Instrument):
         return device_temp
 
     def get_idn(self) -> Dict[str, Optional[str]]:
+        """
+        Get the identification information of the current device
+        """
         logging.info(__name__ + " : Getting device info")
         self._handle = ctypes.c_void_p(self._dll.sc5511a_open_device(self._serial_number))
         self._dll.sc5511a_get_device_info(self._handle, ctypes.byref(self._device_info))

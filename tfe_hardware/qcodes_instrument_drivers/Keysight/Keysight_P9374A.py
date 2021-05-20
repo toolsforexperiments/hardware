@@ -122,11 +122,11 @@ class TraceData(ParameterWithSetpoints):
         # Code will check if VNA average trpe is SWEEP.
         # If not a type error will be raised.
         try:
-            prev_trigger_source, prev_trigger_mode, prev_averaging = self.root_instrument.average()
+            prev_trigger_source, prev_sweep_mode, prev_averaging = self.root_instrument.average()
             data = self.root_instrument.ask(f"CALC:MEAS{self.trace_number}:DATA:FDATA?")
             # set relevant parameters back to their old values
             self.root_instrument.trigger_source(prev_trigger_source)
-            self.root_instrument.trigger_mode(prev_trigger_mode)
+            self.root_instrument.sweep_mode(prev_sweep_mode)
             self.root_instrument.averaging(prev_averaging)
             if prev_fmt is not None:
                 self.root_instrument.write(f"CALC:MEAS{self.trace_number}:FORM {prev_fmt}")
@@ -336,13 +336,18 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
                            set_cmd='TRIG:SOUR {}',
                            vals=vals.Enum('IMM', 'EXT', 'MAN')
                            )
-        self.add_parameter('trigger_mode',
+        self.add_parameter('sweep_mode',
                            get_cmd='SENS1:SWE:MODE?',
                            set_cmd='SENS1:SWE:MODE {}',
                            vals=vals.Enum('HOLD',
                                           'CONT',
                                           'GRO',
                                           'SING'))
+        self.add_parameter('trigger_mode',
+                           get_cmd='SENS:SWE:TRIG:MODE?',
+                           set_cmd='SENS:SWE:TRIG:MODE {}',
+                           vals=vals.Enum('CHAN', 'SWE', 'POIN', 'TRAC')
+                           )
         self.add_parameter('trform',
                            get_cmd=':CALC1:FORM?',
                            set_cmd=':CALC1:FORM {}',
@@ -501,11 +506,11 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
             raise TypeError('VNA average type is set to POINT, neeed to be SWEEP. Use vna.avg_type() function to change')
         else:
             prev_trigger_source = self.trigger_source()
-            prev_trigger_mode = self.trigger_mode()
+            prev_sweep_mode = self.sweep_mode()
             prev_averaging = self.averaging()
             # The following trigger settings are necessary for VNA to take the average
             self.trigger_source('MAN')
-            self.trigger_mode('SING')
+            self.sweep_mode('SING')
             self.averaging(1)
             self.write("SENS:AVER:CLE")  # does not apply to point averaging
             for i in range(self.avg_num()):
@@ -515,5 +520,5 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
                     averaged = self.ask("*OPC?")
             print('Average completed')
 
-        return prev_trigger_source, prev_trigger_mode, prev_averaging
+        return prev_trigger_source, prev_sweep_mode, prev_averaging
 
