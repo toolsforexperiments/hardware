@@ -265,7 +265,7 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
         self.add_parameter('num_points',
                            get_cmd=':SENS1:SWE:POIN?',
                            set_cmd=':SENS1:SWE:POIN {}',
-                           vals=vals.Ints(1, 1601),
+                           vals=vals.Ints(1, 100001),
                            get_parser=int
                            )
         self.add_parameter('ifbw',
