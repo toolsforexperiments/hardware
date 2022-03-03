@@ -167,7 +167,8 @@ class Trace(InstrumentChannel):
             unit='Hz',
             parameter_class=FrequencyData,
             trace_number=self._number,
-            vals=vals.Arrays(shape=(self.npts.get_latest,))
+            vals=vals.Arrays(shape=(self.npts.get_latest,)),
+            snapshot_exclude=True,
         )
 
         self.add_parameter(
@@ -177,7 +178,8 @@ class Trace(InstrumentChannel):
             parameter_class=TraceData,
             trace_number=self._number,
             vals=vals.Arrays(shape=(self.npts.get_latest,),
-                             valid_types=(np.floating, np.complexfloating))
+                             valid_types=(np.floating, np.complexfloating)),
+            snapshot_exclude = True,
         )
 
         self.add_parameter(
@@ -265,7 +267,7 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
         self.add_parameter('num_points',
                            get_cmd=':SENS1:SWE:POIN?',
                            set_cmd=':SENS1:SWE:POIN {}',
-                           vals=vals.Ints(1, 100001),
+                           vals=vals.Ints(1, 100000),
                            get_parser=int
                            )
         self.add_parameter('ifbw',
@@ -521,4 +523,8 @@ class Keysight_P9374A_SingleChannel(VisaInstrument):
             print('Average completed')
 
         return prev_trigger_source, prev_sweep_mode, prev_averaging
+
+    def clear_averages(self) -> None:
+        """Reset averaging and wait for new trigger to start over."""
+        self.write('SENS:AVER:CLE')
 
