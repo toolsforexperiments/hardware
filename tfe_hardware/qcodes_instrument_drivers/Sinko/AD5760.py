@@ -1,3 +1,10 @@
+'''
+A simple driver to control the homemade current source
+'''
+
+__author__ = "Kaushik Singirikonda"
+__email__ = 'ks105@illinois.edu'
+
 from functools import partial
 from typing import Optional, Union, Any
 import time,sys
@@ -5,10 +12,15 @@ import clr  # install pythonnet
 
 from qcodes.instrument.parameter import DelegateParameter
 from qcodes import (Instrument, validators as vals)
-from qcodes.instrument.visa import VisaInstrument
 from qcodes.instrument.channel import InstrumentChannel
 from qcodes.utils.validators import Numbers, Bool, Enum, Ints
 
+'''
+In order to initiate the use of the current source, follow the guidelines given here :
+
+https://uillinoisedu.sharepoint.com/sites/Pfafflab/_layouts/OneNote.aspx?id=%2Fsites%2FPfafflab%2FSiteAssets%2FPfafflab%20Notebook&wd=target%28Projects%2FElementaryCircuits%2FCurrent%20Source.one%7C8C1A05E0-ED99-4899-83F1-97F9EB59041F%2F%29
+onenote:https://uillinoisedu.sharepoint.com/sites/Pfafflab/SiteAssets/Pfafflab%20Notebook/Projects/ElementaryCircuits/Current%20Source.one#section-id={8C1A05E0-ED99-4899-83F1-97F9EB59041F}&end
+'''
 
 
 class AD5760(Instrument):
@@ -34,13 +46,6 @@ class AD5760(Instrument):
                            get_cmd=self._get_volt,
                            vals= Numbers(min_value=-10, max_value=10)
                            )
-        # self.add_parameter('current',
-        #                    label="Current",
-        #                    unit='A',
-        #                    set_cmd=self._get_set_current,
-        #                    get_cmd=self._get_amp
-        # #                   )
-        # self._get_set_volt(5)
         
     def on(self) -> None:
         self.write('OUTPUT 1')
@@ -60,10 +65,7 @@ class AD5760(Instrument):
     def connect_board(self, host_name: str, path: str, syspath: str):
         
         sys.path.append(rf'{syspath}')
-        
-        # noinspection SpellCheckingInspection
-        
-        # noinspection SpellCheckingInspection
+
         clr.AddReference('AnalogDevices.Csa.Remoting.Clients')
         clr.AddReference('AnalogDevices.Csa.Remoting.Contracts')
         
@@ -85,7 +87,6 @@ class AD5760(Instrument):
             output_level: If missing, we assume that we are getting the
                 current level. Else we are setting it
         """
-        # self._assert_mode(mode)
         if output_level is not None:
             self.write(output_level)
             return None
@@ -102,7 +103,7 @@ class AD5760(Instrument):
             delay: The time between finishing one step and
                 starting another in seconds.
         """
-        # self._assert_mode("VOLT")
+
         self.ramp_trial(ramp_to, step, delay)
 
 
