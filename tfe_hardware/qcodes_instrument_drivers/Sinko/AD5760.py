@@ -131,6 +131,9 @@ class AD5760(Instrument):
         self.write()
         
     def ask(self):
+        '''
+        More features to be added
+        '''
         return (float(int(self.client.ReadRegister("1"), 16))-524288)*20/1048576
     
     def write(self, output_level):
