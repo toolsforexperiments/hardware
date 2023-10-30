@@ -16,10 +16,13 @@ from qcodes.instrument.channel import InstrumentChannel
 from qcodes.utils.validators import Numbers, Bool, Enum, Ints
 
 '''
-In order to initiate the use of the current source, follow the guidelines given here :
+To use this current source, you first have to install and setup the ACE software. Upon connecting to the AD5760
+board with your computer using the software, you have to initialize a setup on python to talk to the software to
+enable writing.
 
-https://uillinoisedu.sharepoint.com/sites/Pfafflab/_layouts/OneNote.aspx?id=%2Fsites%2FPfafflab%2FSiteAssets%2FPfafflab%20Notebook&wd=target%28Projects%2FElementaryCircuits%2FCurrent%20Source.one%7C8C1A05E0-ED99-4899-83F1-97F9EB59041F%2F%29
-onenote:https://uillinoisedu.sharepoint.com/sites/Pfafflab/SiteAssets/Pfafflab%20Notebook/Projects/ElementaryCircuits/Current%20Source.one#section-id={8C1A05E0-ED99-4899-83F1-97F9EB59041F}&end
+Following this, you can simply run this code to operate a stable current source.
+
+
 '''
 
 
@@ -46,6 +49,13 @@ class AD5760(Instrument):
                            get_cmd=self._get_volt,
                            vals= Numbers(min_value=-10, max_value=10)
                            )
+        
+        self.add_parameter('current',
+                           label='Current',
+                           unit='A',
+                           set_cmd=self._get_set_current,
+                           get_cmd=self._get_current,
+                           vals= Numbers(min_value=-0.1, max_value=0.1))
         
     def on(self) -> None:
         self.write('OUTPUT 1')
@@ -91,6 +101,20 @@ class AD5760(Instrument):
             self.write(output_level)
             return None
         return self.ask()
+    
+    def _get_set_current(self,
+                      output_level: Optional[float] = None
+                      ) -> Optional[float]:
+        
+        if output_level is not None:
+            self.write(output_level*100)
+            return None
+        return self.ask()/100
+    
+    
+    def ramp_current(self, ramp_to: float, step: float, delay: float) -> None:
+
+        self.ramp_trial(ramp_to*100, step*100, delay)
 
         
     def ramp_voltage(self, ramp_to: float, step: float, delay: float) -> None:
@@ -124,8 +148,12 @@ class AD5760(Instrument):
                 self.voltage(v_f)
                 time.sleep(delay) 
 
+
     def _get_volt(self):
         return self.ask()
+    
+    def _get_current(self):
+        return self.ask()/100
 
     def _set_output(self, output_level) -> None:
         self.write()
