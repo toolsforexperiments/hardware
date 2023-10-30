@@ -1,5 +1,5 @@
 '''
-A simple driver to control the homemade current source
+A simple driver to control the AD5760 current source
 '''
 
 __author__ = "Kaushik Singirikonda"
