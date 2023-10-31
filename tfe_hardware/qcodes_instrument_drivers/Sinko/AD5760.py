@@ -66,11 +66,11 @@ class AD5760(Instrument):
         self.measure._output = False
 
     def state(self):
-        state = self.ask()
-        if state is not None:
-            return bool(1)
-        else:
-            return bool(0)
+        try:
+            self.ask()
+            return True
+        except:
+            return False
     
     def connect_board(self, host_name: str, path: str, syspath: str):
         
@@ -79,8 +79,7 @@ class AD5760(Instrument):
         clr.AddReference('AnalogDevices.Csa.Remoting.Clients')
         clr.AddReference('AnalogDevices.Csa.Remoting.Contracts')
         
-        # noinspection PyUnresolvedReferences,SpellCheckingInspection
-        from AnalogDevices.Csa.Remoting.Clients import ClientManager  #noqa
+        from AnalogDevices.Csa.Remoting.Clients import ClientManager  
         manager = ClientManager.Create(-1)
         self.client = manager.CreateRequestClient(f"localhost:{host_name}")
         self.client.ContextPath = path
@@ -90,12 +89,11 @@ class AD5760(Instrument):
                         output_level: Optional[float] = None
                         ) -> Optional[float]:
         """
-        Get or set the output level.
+        Get or set the voltage output.
 
         Args:
-            mode: "CURR" or "VOLT"
             output_level: If missing, we assume that we are getting the
-                current level. Else we are setting it
+                voltage output. Else we are setting it
         """
         if output_level is not None:
             self.write(output_level)
@@ -106,6 +104,14 @@ class AD5760(Instrument):
                       output_level: Optional[float] = None
                       ) -> Optional[float]:
         
+        """
+        Get or set the current output.
+
+        Args:
+            output_level: If missing, we assume that we are getting the
+                current output. Else we are setting it
+        """
+
         if output_level is not None:
             self.write(output_level*100)
             return None
@@ -113,7 +119,15 @@ class AD5760(Instrument):
     
     
     def ramp_current(self, ramp_to: float, step: float, delay: float) -> None:
+        """
+        Ramp the current from the current level to the specified output.
 
+        Args:
+            ramp_to: The ramp target in Amps
+            step: The ramp steps in Amps
+            delay: The time between finishing one step and
+                starting another in seconds.
+        """
         self.ramp_trial(ramp_to*100, step*100, delay)
 
         
