@@ -30,6 +30,17 @@ class AD5760(Instrument):
 
     def __init__(self, name: str, host_name: str, path: str, syspath: str, terminator: str = "\n",
                  **kwargs: Any) -> None:
+        
+        '''
+        path:  syspath is the path of the specific device that we want to talk to using the app.
+        This path indicates the specific type of device that we want to talk to and the specific 
+        subsystem as well.
+        for example "\System\Subsystem_1\EVAL-AD5760SDZ\AD5760"
+
+        syspath:
+        this is the address of the ACE application, using which we talk to the current source through 
+        python. for example "C:\Program Files\Analog Devices\ACE\Client"
+        '''
         super().__init__(name, **kwargs)
         self.connect_board(host_name, path, syspath)
 
@@ -174,7 +185,11 @@ class AD5760(Instrument):
         
     def ask(self):
         '''
-        More features to be added
+        More features to be added,
+
+        As the device operates in hexadecimals, we convert the output to an integer type variable.
+        Following which, the range of the output is adjusted by converting the allowed range of outputs
+        to measureable values.
         '''
         return (float(int(self.client.ReadRegister("1"), 16))-524288)*20/1048576
     
