@@ -32,14 +32,21 @@ class AD5760(Instrument):
                  **kwargs: Any) -> None:
         
         '''
-        path:  syspath is the path of the specific device that we want to talk to using the app.
-        This path indicates the specific type of device that we want to talk to and the specific 
-        subsystem as well.
-        for example "\System\Subsystem_1\EVAL-AD5760SDZ\AD5760"
+        Args:
 
-        syspath:
-        this is the address of the ACE application, using which we talk to the current source through 
-        python. for example "C:\Program Files\Analog Devices\ACE\Client"
+        
+            path:  
+                This is the path of the board that we want to talk to using the app.
+                The board itself has a local path on the app, which is indicated by the system and subsystem on
+                the board that operate on. By default it is on Subsystem_1, but can be changed according to the
+                user's preference. 
+                The last part of the address describes the type of control board being used and the final board
+                supplying the current.
+                for example "\System\Subsystem_1\EVAL-AD5760SDZ\AD5760"
+
+            syspath:
+                this is the address of the ACE application, using which we talk to the current source through 
+                python. for example "C:\Program Files\Analog Devices\ACE\Client"
         '''
         super().__init__(name, **kwargs)
         self.connect_board(host_name, path, syspath)
@@ -124,9 +131,9 @@ class AD5760(Instrument):
         """
 
         if output_level is not None:
-            self.write(output_level*100)
+            self.write(output_level*1000)
             return None
-        return self.ask()/100
+        return self.ask()/1000
     
     
     def ramp_current(self, ramp_to: float, step: float, delay: float) -> None:
@@ -139,7 +146,7 @@ class AD5760(Instrument):
             delay: The time between finishing one step and
                 starting another in seconds.
         """
-        self.ramp_trial(ramp_to*100, step*100, delay)
+        self.ramp_trial(ramp_to*1000, step*1000, delay)
 
         
     def ramp_voltage(self, ramp_to: float, step: float, delay: float) -> None:
