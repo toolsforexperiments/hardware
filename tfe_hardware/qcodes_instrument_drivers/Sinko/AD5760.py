@@ -197,6 +197,8 @@ class AD5760(Instrument):
         As the device operates in hexadecimals, we convert the output to an integer type variable.
         Following which, the range of the output is adjusted by converting the allowed range of outputs
         to measureable values.
+
+        524288 and 65536 are the conversion factors from the board output to volts.
         '''
         return (float(int(self.client.ReadRegister("1"), 16))-524288)*20/1048576
     
